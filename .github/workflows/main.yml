@@ -1,0 +1,104 @@
+name: Build MonitoringEXP APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - ".github/workflows/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Android project
+        run: |
+          set -e
+
+          rm -rf project
+          mkdir project
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ZIP project tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "Menggunakan: $ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d project
+
+          ROOT=$(find project -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -print -quit | xargs -r dirname)
+
+          if [ -z "$ROOT" ]; then
+            echo "settings.gradle tidak ditemukan!"
+            find project -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+
+          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "Project root: $ROOT"
+
+      - name: Fix AndroidX configuration
+        run: |
+          printf '%s\n' \
+            'android.useAndroidX=true' \
+            'android.enableJetifier=true' \
+            > "$PROJECT_ROOT/gradle.properties"
+
+          echo "gradle.properties:"
+          cat "$PROJECT_ROOT/gradle.properties"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: |
+          gradle assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          mkdir -p output
+
+          APK=$(find "$PROJECT_ROOT/app/build/outputs/apk" \
+            -type f -name "*.apk" \
+            -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "APK tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "APK ditemukan: $APK"
+          cp "$APK" output/MonitoringEXP-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonitoringEXP-APK
+          path: output/MonitoringEXP-debug.apk
