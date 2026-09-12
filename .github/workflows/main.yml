@@ -22,7 +22,7 @@ jobs:
           rm -rf project
           mkdir project
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          ZIP_FILE="./MonitoringEXP_MU_Scanner_Ringan_V6_CSV_Icon_FIX.zip"
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ZIP project tidak ditemukan!"
